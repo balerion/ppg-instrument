@@ -3,12 +3,19 @@
 #include <Wire.h>
 #include <microsmooth.h>
 
+bool serial_enable = true;
+
 // defines for tacho
 #define timeSeconds 10
+
+const float min_rpm = 2000;
+const float max_rpm = 8000;
 // defines for tacho: Set GPIOs for LED and PIR Motion Sensor
-const int led = 12;
 const int tachoPin = 0;
-const long updatet = 100;
+const long updatet = 20;
+
+float rpm_filt = 0;
+float ww = 2; // filter weight. larger numbers -> slower filters. 40 is ..s, 1 is no filtering
 
 // defines for tacho: Timer auxiliary variables
 unsigned long tt = millis();
@@ -48,27 +55,31 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(tachoPin), isr, FALLING);
 
   // initialize serial:
-  Serial.begin(115200);
+  if (serial_enable) {
+    Serial.begin(115200);
+  }
   u8g2.begin();
 }
 
-long looptime = 0;
-long loopUpdateTime = 50;
+long tt_loop = 0;
+long loopUpdateTime = 10;
+
 void loop() {
-  while (Serial.available() > 0) {
-
-    // look for the next valid integer in the incoming serial stream:
-    batteryVoltage = Serial.parseInt();
-    throttle = Serial.parseInt();
-
-    if (Serial.read() == '\n') {
-      Serial.println(batteryVoltage, HEX);
+  if (serial_enable) {
+    while (Serial.available() > 0) {
+      // look for the next valid integer in the incoming serial stream:
+      batteryVoltage = Serial.parseInt();
+      rev = Serial.parseInt();
+      if (Serial.read() == '\n') {
+        Serial.println(rev, HEX);
+      }
     }
+    // Serial.println(rpm_filt);
   }
-  if (millis()-looptime > loopUpdateTime) {
+  if (millis()-tt_loop > loopUpdateTime) {
     updateTacho();
     updateMainDisplay();
-    looptime = millis();
+    tt_loop = millis();
   }
 
 }
@@ -78,23 +89,19 @@ void isr() {
   rev++;
 }
 
-float filtered_value = 0;
-float ww = 40; // this is the filter weight. The larger the number, the ... the filter. 40 corresponds to ..s
 
 void updateTacho() {
   dt = micros() - oldtime;
+  oldtime = micros();
   if (dt > 0) {
     rpm = (rev / dt) * 60000000;
+    if (!serial_enable) {
+      rev = 0;
+    }
   }
-  oldtime = micros();
-  rev = 0;
-  filtered_value = ww * (rpm) + (1 - ww) * filtered_value;
-
-  if (tt-millis()>updatet) {
-    tt=millis();
-    Serial.println(dt);
-  }
-  
+  rpm_filt = (1/ww) * (rpm) + (1 - (1/ww)) * rpm_filt;
+  throttle = map(rpm_filt, min_rpm, max_rpm, 0, 100);
+  throttle = constrain(throttle, 0, 100);
 }
 
 
@@ -138,10 +145,10 @@ void drawPage()
   int x = 0;
   int y = 16;
 
-  value = throttle;
-  suffix = "rpm";
+  value = rpm_filt/1000;
+  suffix = "krpm";
   prefix = "REVS";
-  decimals = 1;
+  decimals = 2;
 
 // Display prefix (title)
   displayString = prefix;
@@ -256,25 +263,31 @@ void drawThrottle() //Draws Battery Level when not being used as Throttle
   u8g2.drawHLine(x, y + 10, 5);
   u8g2.drawHLine(x + 52 - 4, y + 10, 5);
 
-  if (throttle >= 127)
+  int width = map(inputValue, 0, 100, 0, 49);
+  for (int i = 0; i < width; i++)
   {
-    int width = map(inputValue, 127, 255, 0, 49);
+    u8g2.drawVLine(x + i + 2, y + 2, 7);
+  }
 
-    for (int i = 0; i < width; i++)
-    {
-      //if( (i % 2) == 0){
-      u8g2.drawVLine(x + i + 2, y + 2, 7);
-      //}
-    }
-  }
-  else
-  {
-    int width = map(inputValue, 0, 126, 49, 0);
-    for (int i = 0; i < width; i++)
-    {
-      //if( (i % 2) == 0){
-      u8g2.drawVLine(x + 50 - i, y + 2, 7);
-      //}
-    }
-  }
+  // if (throttle >= 127)
+  // {
+  //   int width = map(inputValue, 127, 255, 0, 49);
+
+  //   for (int i = 0; i < width; i++)
+  //   {
+  //     //if( (i % 2) == 0){
+  //     u8g2.drawVLine(x + i + 2, y + 2, 7);
+  //     //}
+  //   }
+  // }
+  // else
+  // {
+  //   int width = map(inputValue, 0, 126, 49, 0);
+  //   for (int i = 0; i < width; i++)
+  //   {
+  //     //if( (i % 2) == 0){
+  //     u8g2.drawVLine(x + 50 - i, y + 2, 7);
+  //     //}
+  //   }
+  // }
 }
