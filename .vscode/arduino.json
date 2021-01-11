@@ -1,6 +1,6 @@
 {
     "board": "adafruit:avr:feather32u4",
-    "sketch": "main.ino",
+    "sketch": "Arduino code/main.ino",
     "port": "/dev/tty.usbmodem1421",
     "programmer": "AVR ISP"
 }

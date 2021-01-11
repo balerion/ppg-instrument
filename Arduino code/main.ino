@@ -1,6 +1,24 @@
 #include <U8g2lib.h>
 #include <SPI.h>
 #include <Wire.h>
+#include <microsmooth.h>
+
+// defines for tacho
+#define timeSeconds 10
+// defines for tacho: Set GPIOs for LED and PIR Motion Sensor
+const int led = 12;
+const int tachoPin = 0;
+const long updatet = 100;
+
+// defines for tacho: Timer auxiliary variables
+unsigned long tt = millis();
+unsigned long dt = micros();
+unsigned long oldtime = micros();
+float rev = 0;
+float rpm = 0;
+
+unsigned long lastTrigger = 0;
+boolean startTimer = false;
 
 // Defining the type of display used (128x32)
 U8G2_SSD1306_128X32_UNIVISION_1_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
@@ -26,11 +44,16 @@ float batteryVoltage = 0;
 float throttle = 0;
 
 void setup() {
+  pinMode(tachoPin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(tachoPin), isr, FALLING);
+
   // initialize serial:
   Serial.begin(115200);
   u8g2.begin();
 }
 
+long looptime = 0;
+long loopUpdateTime = 50;
 void loop() {
   while (Serial.available() > 0) {
 
@@ -42,12 +65,37 @@ void loop() {
       Serial.println(batteryVoltage, HEX);
     }
   }
-  
-  updateMainDisplay();
-  
+  if (millis()-looptime > loopUpdateTime) {
+    updateTacho();
+    updateMainDisplay();
+    looptime = millis();
+  }
 
 }
 
+
+void isr() {
+  rev++;
+}
+
+float filtered_value = 0;
+float ww = 40; // this is the filter weight. The larger the number, the ... the filter. 40 corresponds to ..s
+
+void updateTacho() {
+  dt = micros() - oldtime;
+  if (dt > 0) {
+    rpm = (rev / dt) * 60000000;
+  }
+  oldtime = micros();
+  rev = 0;
+  filtered_value = ww * (rpm) + (1 - ww) * filtered_value;
+
+  if (tt-millis()>updatet) {
+    tt=millis();
+    Serial.println(dt);
+  }
+  
+}
 
 
 // Function to calculate and return the remotes battery voltage.
