@@ -3,7 +3,12 @@
 #include <Wire.h>
 #include <microsmooth.h>
 
-bool serial_enable = true;
+#define serial_enable true
+
+// Battery monitoring
+#define VBATPIN A9
+const float minVoltage = 3.2;
+const float maxVoltage = 4.1;
 
 // defines for tacho
 #define timeSeconds 10
@@ -35,11 +40,6 @@ const int chargeMeasurePin = A1;
 const int batteryMeasurePin = A2;
 const int hallSensorPin = A3;
 
-// Battery monitoring
-const float minVoltage = 3.2;
-const float maxVoltage = 4.1;
-const float refVoltage = 5.1; // Set to 4.5V if you are testing connected to USB, otherwise 5V (or the supply voltage)
-
 // Defining variables for OLED display
 char displayBuffer[20];
 String displayString;
@@ -50,12 +50,14 @@ unsigned long lastDataRotation;
 float batteryVoltage = 0;
 float throttle = 0;
 
-void setup() {
+void setup()
+{
   pinMode(tachoPin, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(tachoPin), isr, FALLING);
 
   // initialize serial:
-  if (serial_enable) {
+  if (serial_enable)
+  {
     Serial.begin(115200);
   }
   u8g2.begin();
@@ -64,46 +66,66 @@ void setup() {
 long tt_loop = 0;
 long loopUpdateTime = 10;
 
-void loop() {
-  if (serial_enable) {
-    while (Serial.available() > 0) {
+void loop()
+{
+  if (serial_enable)
+  {
+    while (Serial.available() > 0)
+    {
       // look for the next valid integer in the incoming serial stream:
       batteryVoltage = Serial.parseInt();
       rev = Serial.parseInt();
-      if (Serial.read() == '\n') {
+      if (Serial.read() == '\n')
+      {
         Serial.println(rev, HEX);
       }
     }
     // Serial.println(rpm_filt);
   }
-  if (millis()-tt_loop > loopUpdateTime) {
+  if (millis() - tt_loop > loopUpdateTime)
+  {
     updateTacho();
+    readBatteryVoltage();
     updateMainDisplay();
     tt_loop = millis();
   }
-
 }
 
+float measuredvbat = 0;
+void readBatteryVoltage()
+{
+  measuredvbat = analogRead(VBATPIN);
+  measuredvbat *= 2;    // we divided by 2, so multiply back
+  measuredvbat *= 3.3;  // Multiply by 3.3V, our reference voltage
+  measuredvbat /= 1024; // convert to voltage
+  if (serial_enable)
+  {
+    Serial.print("VBat: ");
+    Serial.println(measuredvbat);
+  }
+}
 
-void isr() {
+void isr()
+{
   rev++;
 }
 
-
-void updateTacho() {
+void updateTacho()
+{
   dt = micros() - oldtime;
   oldtime = micros();
-  if (dt > 0) {
+  if (dt > 0)
+  {
     rpm = (rev / dt) * 60000000;
-    if (!serial_enable) {
+    if (!serial_enable)
+    {
       rev = 0;
     }
   }
-  rpm_filt = (1/ww) * (rpm) + (1 - (1/ww)) * rpm_filt;
+  rpm_filt = (1 / ww) * (rpm) + (1 - (1 / ww)) * rpm_filt;
   throttle = map(rpm_filt, min_rpm, max_rpm, 0, 100);
   throttle = constrain(throttle, 0, 100);
 }
-
 
 // Function to calculate and return the remotes battery voltage.
 //float batteryVoltage()
@@ -121,16 +143,16 @@ void updateTacho() {
 //  return batteryVoltage;
 //}
 
-void updateMainDisplay() {
+void updateMainDisplay()
+{
 
   u8g2.firstPage();
-  do {
+  do
+  {
     drawPage();
     drawBatteryLevel();
     drawThrottle();
   } while (u8g2.nextPage());
-
-
 }
 
 void drawPage()
@@ -145,12 +167,12 @@ void drawPage()
   int x = 0;
   int y = 16;
 
-  value = rpm_filt/1000;
+  value = rpm_filt / 1000;
   suffix = "krpm";
   prefix = "REVS";
   decimals = 2;
 
-// Display prefix (title)
+  // Display prefix (title)
   displayString = prefix;
   displayString.toCharArray(displayBuffer, 10);
   u8g2.setFont(u8g2_font_profont12_tr);
@@ -170,18 +192,19 @@ void drawPage()
     displayString = (String)first;
   }
 
-
-
   // Display numbers
   displayString.toCharArray(displayBuffer, 10);
   u8g2.setFont(u8g2_font_logisoso22_tn);
   u8g2.drawStr(x + 55, y + 13, displayBuffer);
 
   // Display decimals
-  if (displayData != 4) displayString = "."; //Disabled the . for the total_km
-  else displayString = "";
+  if (displayData != 4)
+    displayString = "."; //Disabled the . for the total_km
+  else
+    displayString = "";
 
-  if (decimals > 1) {
+  if (decimals > 1)
+  {
     if (last <= 9)
     {
       displayString += "0" + (String)last;
@@ -191,9 +214,8 @@ void drawPage()
       displayString += (String)last;
     }
   }
-  else displayString += (String)last;
-
-
+  else
+    displayString += (String)last;
 
   displayString.toCharArray(displayBuffer, decimals + 2);
   u8g2.setFont(u8g2_font_profont12_tr);
@@ -206,10 +228,10 @@ void drawPage()
   u8g2.drawStr(x + 86 + 2, y + 13, displayBuffer);
 }
 
-
 // Function used to indicate the remotes battery level.
-int batteryLevel() {
-  float voltage = batteryVoltage;
+int batteryLevel()
+{
+  float voltage = measuredvbat;
 
   if (voltage <= minVoltage)
   {
@@ -225,10 +247,9 @@ int batteryLevel() {
   }
 }
 
-
 void drawBatteryLevel()
 {
-  int level = batteryVoltage;
+  int level = batteryLevel();
 
   // Position on OLED
   int x = 108;
@@ -246,7 +267,6 @@ void drawBatteryLevel()
     }
   }
 }
-
 
 void drawThrottle() //Draws Battery Level when not being used as Throttle
 {
