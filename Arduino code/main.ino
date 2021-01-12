@@ -9,6 +9,7 @@
 #define VBATPIN A9
 const float minVoltage = 3.2;
 const float maxVoltage = 4.1;
+const float refVoltage = 3.3;
 
 // defines for tacho
 #define timeSeconds 10
@@ -91,17 +92,34 @@ void loop()
   }
 }
 
-float measuredvbat = 0;
+
+// Function to calculate and return the thermocouple reading.
+float readCHT()
+{
+ float chtVoltage = 0.0;
+ int total = 0;
+
+ for (int i = 0; i < 16; i++)
+ {
+   total += analogRead(chtMeasurePin);
+ }
+
+ chtVoltage = (refVoltage / 1024.0) * ((float)total / 16.0);
+
+ return chtVoltage;
+}
+
+float batteryVoltage = 0;
 void readBatteryVoltage()
 {
-  measuredvbat = analogRead(VBATPIN);
-  measuredvbat *= 2;    // we divided by 2, so multiply back
-  measuredvbat *= 3.3;  // Multiply by 3.3V, our reference voltage
-  measuredvbat /= 1024; // convert to voltage
+  batteryVoltage = analogRead(VBATPIN);
+  batteryVoltage *= 2;    // we divided by 2, so multiply back
+  batteryVoltage *= refVoltage;  // Multiply by 3.3V, our reference voltage
+  batteryVoltage /= 1024.0; // convert to voltage
   if (serial_enable)
   {
     Serial.print("VBat: ");
-    Serial.println(measuredvbat);
+    Serial.println(batteryVoltage);
   }
 }
 
@@ -126,22 +144,6 @@ void updateTacho()
   throttle = map(rpm_filt, min_rpm, max_rpm, 0, 100);
   throttle = constrain(throttle, 0, 100);
 }
-
-// Function to calculate and return the remotes battery voltage.
-//float batteryVoltage()
-//{
-//  float batteryVoltage = 0.0;
-//  int total = 0;
-//
-//  for (int i = 0; i < 16; i++)
-//  {
-//    total += analogRead(batteryMeasurePin);
-//  }
-//
-//  batteryVoltage = (refVoltage / 1024.0) * ((float)total / 16.0);
-//
-//  return batteryVoltage;
-//}
 
 void updateMainDisplay()
 {
@@ -231,7 +233,7 @@ void drawPage()
 // Function used to indicate the remotes battery level.
 int batteryLevel()
 {
-  float voltage = measuredvbat;
+  float voltage = batteryVoltage;
 
   if (voltage <= minVoltage)
   {
