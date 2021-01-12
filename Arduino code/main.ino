@@ -37,9 +37,9 @@ boolean startTimer = false;
 U8G2_SSD1306_128X32_UNIVISION_1_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 
 // Pin definition
-const int chargeMeasurePin = A1;
-const int batteryMeasurePin = A2;
-const int hallSensorPin = A3;
+// const int chargeMeasurePin = A1;
+// const int batteryMeasurePin = A2;
+const int chtMeasurePin = A1;
 
 // Defining variables for OLED display
 char displayBuffer[20];
@@ -87,35 +87,50 @@ void loop()
   {
     updateTacho();
     readBatteryVoltage();
+    readCht();
     updateMainDisplay();
     tt_loop = millis();
   }
 }
 
-
 // Function to calculate and return the thermocouple reading.
-float readCHT()
+float readChtVoltage()
 {
- float chtVoltage = 0.0;
- int total = 0;
+  float chtVoltage = 0.0;
+  int total = 0;
+  int extrabits = 2;
+  int nn = pow(2, 2*extrabits);
+  for (int i = 0; i < 16; i++)
+  {
+    total += analogRead(chtMeasurePin);
+  }
 
- for (int i = 0; i < 16; i++)
- {
-   total += analogRead(chtMeasurePin);
- }
+  chtVoltage = (refVoltage / 1024.0) * ((float)total / 16.0);
 
- chtVoltage = (refVoltage / 1024.0) * ((float)total / 16.0);
-
- return chtVoltage;
+  return chtVoltage;
 }
 
-float batteryVoltage = 0;
+// function for calibrating cht voltage to temperature in °C
+float calibratedCht(float voltage) {
+  return (voltage - 1.25) / 0.005;
+}
+
+float chtReading = 0;
+void readCht() {
+  float chtVoltage = readChtVoltage();
+  chtReading = calibratedCht(chtVoltage);
+  if (serial_enable) {
+    Serial.print("CHT: ");
+    Serial.println(chtReading);
+  }
+}
+
 void readBatteryVoltage()
 {
   batteryVoltage = analogRead(VBATPIN);
-  batteryVoltage *= 2;    // we divided by 2, so multiply back
-  batteryVoltage *= refVoltage;  // Multiply by 3.3V, our reference voltage
-  batteryVoltage /= 1024.0; // convert to voltage
+  batteryVoltage *= 2;          // we divided by 2, so multiply back
+  batteryVoltage *= refVoltage; // Multiply by 3.3V, our reference voltage
+  batteryVoltage /= 1024.0;     // convert to voltage
   if (serial_enable)
   {
     Serial.print("VBat: ");
