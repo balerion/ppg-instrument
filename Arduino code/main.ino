@@ -2,6 +2,7 @@
 #include <SPI.h>
 #include <Wire.h>
 #include <microsmooth.h>
+#include <SD.h>
 
 #define serial_enable true
 
@@ -44,7 +45,6 @@ const int chtMeasurePin = A1;
 // Defining variables for OLED display
 char displayBuffer[20];
 String displayString;
-short displayData = 0;
 unsigned long lastSignalBlink;
 unsigned long lastDataRotation;
 
@@ -172,55 +172,70 @@ void updateMainDisplay()
   } while (u8g2.nextPage());
 }
 
-void drawPage()
+typedef struct printStruct
 {
-  int decimals;
   float value;
   String suffix;
   String prefix;
+  int decimals;
+  int bigChars;
+  int x;
+  int y;
+} printStruct;
 
+void drawPage()
+{
+  printStruct rpmPrint;
+  rpmPrint.value = rpm_filt / 1000;
+  rpmPrint.suffix = "krpm";
+  rpmPrint.prefix = "REVS";
+  rpmPrint.decimals = 2;
+  rpmPrint.bigChars = 1;
+  rpmPrint.x = 0;
+  rpmPrint.y = 16;
+  smallPrint(rpmPrint);
+}
+
+void bigPrint(struct printStruct pp)
+{
   int first, last;
 
-  int x = 0;
-  int y = 16;
-
-  value = rpm_filt / 1000;
-  suffix = "krpm";
-  prefix = "REVS";
-  decimals = 2;
-
   // Display prefix (title)
-  displayString = prefix;
+  displayString = pp.prefix;
   displayString.toCharArray(displayBuffer, 10);
   u8g2.setFont(u8g2_font_profont12_tr);
-  u8g2.drawStr(x, y - 1, displayBuffer);
+  u8g2.drawStr(pp.x, pp.y - 1, displayBuffer);
 
   // Split up the float value: a number, b decimals.
-  first = abs(floor(value));
-  last = value * pow(10, 2) - first * pow(10, 2);
+  first = abs(floor(pp.value));
+  last = pp.value * pow(10, 2) - first * pow(10, 2);
 
-  // Add leading zero
-  if (first <= 9)
+  // Add leading zeros (2+bigChars-decimals)
+  if (first < pow(10, 2) && pp.bigChars > 2)
   {
     displayString = "0" + (String)first;
   }
   else
   {
-    displayString = (String)first;
+    if (first <= 9 && pp.bigChars > 1)
+    {
+      displayString = "00" + (String)first;
+    }
+    else
+    {
+      displayString = (String)first;
+    }
   }
 
   // Display numbers
   displayString.toCharArray(displayBuffer, 10);
   u8g2.setFont(u8g2_font_logisoso22_tn);
-  u8g2.drawStr(x + 55, y + 13, displayBuffer);
+  u8g2.drawStr(pp.x + 55, pp.y + 13, displayBuffer);
 
   // Display decimals
-  if (displayData != 4)
-    displayString = "."; //Disabled the . for the total_km
-  else
-    displayString = "";
+  displayString = ".";
 
-  if (decimals > 1)
+  if (pp.decimals > 1)
   {
     if (last <= 9)
     {
@@ -234,15 +249,70 @@ void drawPage()
   else
     displayString += (String)last;
 
-  displayString.toCharArray(displayBuffer, decimals + 2);
+  displayString.toCharArray(displayBuffer, pp.decimals + 2);
   u8g2.setFont(u8g2_font_profont12_tr);
-  u8g2.drawStr(x + 86, y - 1, displayBuffer);
+  u8g2.drawStr(pp.x + 86, pp.y - 1, displayBuffer);
 
   // Display suffix
-  displayString = suffix;
+  displayString = pp.suffix;
   displayString.toCharArray(displayBuffer, 10);
   u8g2.setFont(u8g2_font_profont12_tr);
-  u8g2.drawStr(x + 86 + 2, y + 13, displayBuffer);
+  u8g2.drawStr(pp.x + 86 + 2, pp.y + 13, displayBuffer);
+}
+
+void smallPrint(struct printStruct pp)
+{
+  int first, last;
+
+  // Split up the float value: a number, b decimals.
+  first = abs(floor(pp.value));
+  last = pp.value * pow(10, 2) - first * pow(10, 2);
+
+  // Add leading zeros (2+bigChars-decimals)
+  displayString = "";
+  for (int i = 0; i < pp.bigChars; i++)
+  {
+    if (first < pow(10, i))
+    {
+      displayString = "0" + displayString;
+    }
+    else
+    {
+      displayString = (String)first;
+    }
+  }
+
+  // Display numbers
+  displayString.toCharArray(displayBuffer, 10);
+  u8g2.setFont(u8g2_font_profont12_tr);
+  u8g2.drawStr(pp.x + 55, pp.y + 13, displayBuffer);
+
+  // Display decimals
+  displayString = ".";
+
+  if (pp.decimals > 1)
+  {
+    if (last <= 9)
+    {
+      displayString += "0" + (String)last;
+    }
+    else
+    {
+      displayString += (String)last;
+    }
+  }
+  else
+    displayString += (String)last;
+
+  displayString.toCharArray(displayBuffer, pp.decimals + 2);
+  u8g2.setFont(u8g2_font_profont12_tr);
+  u8g2.drawStr(pp.x + 55 + 4 + 6 * (pp.bigChars - 1), pp.y + 13, displayBuffer);
+
+  // Display suffix
+  displayString = pp.suffix;
+  displayString.toCharArray(displayBuffer, 10);
+  u8g2.setFont(u8g2_font_profont12_tr);
+  u8g2.drawStr(pp.x + 55 + 6 * (pp.bigChars + pp.decimals) + 4 + 3, pp.y + 13, displayBuffer);
 }
 
 // Function used to indicate the remotes battery level.
