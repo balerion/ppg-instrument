@@ -2,6 +2,5 @@
     "board": "adafruit:avr:feather32u4",
     "sketch": "Arduino code/main.ino",
     "port": "/dev/tty.usbmodem1421",
-    "output": "../build",
     "programmer": "AVR ISP"
 }
