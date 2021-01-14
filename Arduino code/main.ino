@@ -53,13 +53,15 @@ float throttle = 0;
 void setup()
 {
   pinMode(tachoPin, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(tachoPin), isr, FALLING);
+  attachInterrupt(digitalPinToInterrupt(tachoPin), rpm_isr, FALLING);
 
   // initialize serial:
   if (serial_enable)
   {
     Serial.begin(115200);
   }
+
+  Wire.setClock(400000);
   u8g2.begin();
 }
 
@@ -139,7 +141,7 @@ void readBatteryVoltage()
   }
 }
 
-void isr()
+void rpm_isr()
 {
   rev++;
 }
