@@ -1,4 +1,4 @@
-#include <SD.h>
+#include <EEPROM.h>
 #include <SPI.h>
 #include <U8g2lib.h>
 #include <Wire.h>
@@ -57,15 +57,49 @@ bool wasSleeping = true;
 bool awake = true;
 float sleepInput = 0;
 
+// time variables
+long tt_loop = 0;
+long loopUpdateTime = 10;
+long tt_button = 0;
+long dt_button = 500;
+
+unsigned long tt_running = 0;
+unsigned long current_runtime = 0;
+unsigned long total_runtime = 0;
+
+long EEPROMReadlong(long address) {
+  long four = EEPROM.read(address);
+  long three = EEPROM.read(address + 1);
+  long two = EEPROM.read(address + 2);
+  long one = EEPROM.read(address + 3);
+
+  return ((four << 0) & 0xFF) + ((three << 8) & 0xFFFF) +
+         ((two << 16) & 0xFFFFFF) + ((one << 24) & 0xFFFFFFFF);
+}
+
+void EEPROMWritelong(int address, long value) {
+  byte four = (value & 0xFF);
+  byte three = ((value >> 8) & 0xFF);
+  byte two = ((value >> 16) & 0xFF);
+  byte one = ((value >> 24) & 0xFF);
+
+  EEPROM.write(address, four);
+  EEPROM.write(address + 1, three);
+  EEPROM.write(address + 2, two);
+  EEPROM.write(address + 3, one);
+}
+
 void prepareSleep() {
   u8g2.setPowerSave(1);
   wasSleeping = false;
+  EEPROMWritelong(0, total_runtime);
   LowPower.powerDown(SLEEP_1S, ADC_OFF, BOD_OFF);
 }
 
 void wakeupProc() {
   u8g2.setPowerSave(0);
   u8g2.begin();
+  total_runtime = EEPROMReadlong(0);
 }
 
 void setup() {
@@ -82,15 +116,6 @@ void setup() {
   Wire.setClock(400000);
   wakeupProc();
 }
-
-long tt_loop = 0;
-long loopUpdateTime = 10;
-long tt_button = 0;
-long dt_button = 500;
-
-unsigned long tt_running = 0;
-unsigned long current_runtime = 0;
-unsigned long total_runtime = 0;
 
 void loop() {
   // check sleep status
@@ -122,13 +147,16 @@ void loop() {
         rev = Serial.parseInt();
         if (Serial.read() == '\n') {
           Serial.println(rev, HEX);
+          if (rev < 0) {
+            total_runtime = -rev;
+            Serial.println("resetting total_runtime");
+          }
         }
       }
       // Serial.println(rpm_filt);
     }
     if (millis() - tt_loop > loopUpdateTime) {
       updateRunningTime();
-      displayTime();
       updateTacho();
       readCht();
       readBatteryVoltage();
@@ -152,22 +180,50 @@ void updateRunningTime() {
 }
 
 void displayTime() {
-  Serial.print("runtime: ");
+  // int x = 89;
+  // int y = 22;
+  int x = 104;
+  int y = 22;
   char buffer[10];  // make this big enough to hold the resulting string
   snprintf(
       buffer, sizeof(buffer), "%02d:%02d:%02d",
       int(current_runtime / 3600000.0),
       int(current_runtime / 60000.0) - int(current_runtime / 3600000.0) * 60,
       int(current_runtime / 1000.0) - int(current_runtime / 60000.0) * 60);
-  Serial.println(buffer);
 
-  Serial.print("total runtime: ");
-  buffer[10];  // make this big enough to hold the resulting string
-  snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d",
-           int(total_runtime / 3600000.0),
-           int(total_runtime / 60000.0) - int(total_runtime / 3600000.0) * 60,
-           int(total_runtime / 1000.0) - int(total_runtime / 60000.0) * 60);
-  Serial.println(buffer);
+  u8g2.setFont(u8g2_font_profont10_mn);
+  u8g2.drawStr(x, y, buffer);
+
+
+  snprintf(
+      buffer, sizeof(buffer), "%02d:%02d:%02d",
+      int(total_runtime / 3600000.0),
+      int(total_runtime / 60000.0) - int(total_runtime / 3600000.0) * 60,
+      int(total_runtime / 1000.0) - int(total_runtime / 60000.0) * 60);
+
+  u8g2.setFont(u8g2_font_profont10_mn);
+  u8g2.drawStr(x, y+8, buffer);
+
+  // Serial.print("total runtime: ");
+  // Serial.println(total_runtime);
+  // buffer[10];  // make this big enough to hold the resulting string
+  // snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d",
+  //          int(total_runtime / 3600000.0),
+  //          int(total_runtime / 60000.0) - int(total_runtime / 3600000.0) *
+  //          60, int(total_runtime / 1000.0) - int(total_runtime / 60000.0) *
+  //          60);
+  // Serial.println(buffer);
+
+  // time to OLED
+  // displayString = "";
+  // for (int i = 0; i < pp.decimals; i++) {
+  //   if (last < pow(10, i)) {
+  //     displayString = "0" + displayString;
+  //   } else {
+  //     displayString = (String)last;
+  //   }
+  // }
+  // // displayString = "." + displayString;
 }
 
 // Function to calculate and return the thermocouple reading.
@@ -285,6 +341,7 @@ void updateMainDisplay() {
   do {
     smallPrint(rpmPrint);
     smallPrint(chtPrint);
+    displayTime();
     drawBatteryLevel();
     drawBar(chtBar);
     drawBar(rpmBar);
@@ -381,7 +438,7 @@ void smallPrint(struct printStruct pp) {
   // Display decimal point
   if (pp.decimals > 0) {
     displayString = ".";
-    displayString.toCharArray(displayBuffer, pp.decimals + 2);
+    displayString.toCharArray(displayBuffer, 10);
     u8g2.setFont(u8g2_font_10x20_tn);
     u8g2.drawStr(pp.x + 55 + 10 * (pp.bigChars) - 3, pp.y + 13, displayBuffer);
   }
