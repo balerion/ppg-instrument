@@ -6,18 +6,18 @@
 
 #define serial_enable true
 
-// Battery monitoring
 #define VBATPIN A9
+#define CHTMEASUREPIN A1
+#define RPMPIN 0
+
+// Battery monitoring
 const float minVoltage = 3.2;
 const float maxVoltage = 4.1;
+const float refVoltage = 3.3;
 
 // defines for tacho
-#define timeSeconds 10
-
 const float min_rpm = 2000;
 const float max_rpm = 8000;
-// defines for tacho: Set GPIOs for LED and PIR Motion Sensor
-const int tachoPin = 0;
 const long updatet = 20;
 
 float rpm_filt = 0;
@@ -52,8 +52,8 @@ float throttle = 0;
 
 void setup()
 {
-  pinMode(tachoPin, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(tachoPin), rpm_isr, FALLING);
+  pinMode(RPMPIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(RPMPIN), rpm_isr, FALLING);
 
   // initialize serial:
   if (serial_enable)
@@ -75,7 +75,6 @@ void loop()
     while (Serial.available() > 0)
     {
       // look for the next valid integer in the incoming serial stream:
-      batteryVoltage = Serial.parseInt();
       rev = Serial.parseInt();
       if (Serial.read() == '\n')
       {
@@ -87,6 +86,7 @@ void loop()
   if (millis() - tt_loop > loopUpdateTime)
   {
     updateTacho();
+    readCht();
     readBatteryVoltage();
     updateMainDisplay();
     tt_loop = millis();
@@ -102,7 +102,7 @@ float readChtVoltage()
   int nn = pow(2, 2 * extrabits);
   for (int i = 0; i < 16; i++)
   {
-    total += analogRead(chtMeasurePin);
+    total += analogRead(CHTMEASUREPIN);
   }
 
   chtVoltage = (refVoltage / 1024.0) * ((float)total / 16.0);
@@ -130,14 +130,14 @@ void readCht()
 
 void readBatteryVoltage()
 {
-  measuredvbat = analogRead(VBATPIN);
-  measuredvbat *= 2;    // we divided by 2, so multiply back
-  measuredvbat *= 3.3;  // Multiply by 3.3V, our reference voltage
-  measuredvbat /= 1024; // convert to voltage
+  batteryVoltage = analogRead(VBATPIN);
+  batteryVoltage *= 2;    // we divided by 2, so multiply back
+  batteryVoltage *= 3.3;  // Multiply by 3.3V, our reference voltage
+  batteryVoltage /= 1024; // convert to voltage
   if (serial_enable)
   {
     Serial.print("VBat: ");
-    Serial.println(measuredvbat);
+    Serial.println(batteryVoltage);
   }
 }
 
@@ -159,7 +159,8 @@ void updateTacho()
     }
   }
   rpm_filt = constrain((1 / ww) * (rpm) + (1 - (1 / ww)) * rpm_filt, 0, max_rpm);
-  if (serial_enable) {
+  if (serial_enable)
+  {
     Serial.print("rpm: ");
     Serial.println(rpm_filt);
   }
@@ -217,7 +218,7 @@ void drawPage()
   rpmPrint.value = rpm_filt / 1000;
   rpmPrint.suffix = "krpm";
   rpmPrint.prefix = "REVS";
-  rpmPrint.decimals = 2;
+  rpmPrint.decimals = 1;
   rpmPrint.bigChars = 1;
   rpmPrint.x = 0;
   rpmPrint.y = 16;
@@ -304,7 +305,7 @@ void smallPrint(struct printStruct pp)
 
   // Split up the float value: a number, b decimals.
   first = abs(floor(pp.value));
-  last = pp.value * pow(10, pp.decimals) - first * pow(10, pp.decimals);
+  last = abs(floor(pp.value * pow(10, pp.decimals) - first * pow(10, pp.decimals)));
 
   // Add leading zeros (2+bigChars-decimals)
   displayString = "";
@@ -338,7 +339,7 @@ void smallPrint(struct printStruct pp)
   displayString = "";
   for (int i = 0; i < pp.decimals; i++)
   {
-    if (first < pow(10, i))
+    if (last < pow(10, i))
     {
       displayString = "0" + displayString;
     }
@@ -357,13 +358,13 @@ void smallPrint(struct printStruct pp)
   displayString = pp.suffix;
   displayString.toCharArray(displayBuffer, 10);
   u8g2.setFont(u8g2_font_profont12_tr);
-  u8g2.drawStr(pp.x + 55 + 10 * (pp.bigChars + pp.decimals) - 3 + (pp.decimals>0 ? 7 : 2) + 3, pp.y + 13, displayBuffer);
+  u8g2.drawStr(pp.x + 55 + 10 * (pp.bigChars + pp.decimals) - 3 + (pp.decimals > 0 ? 8 : 2) + 3, pp.y + 13, displayBuffer);
 }
 
 // Function used to indicate the remotes battery level.
 int batteryLevel()
 {
-  float voltage = measuredvbat;
+  float voltage = batteryVoltage;
 
   if (voltage <= minVoltage)
   {
