@@ -91,7 +91,41 @@ void loop()
   }
 }
 
-float measuredvbat = 0;
+// Function to calculate and return the thermocouple reading.
+float readChtVoltage()
+{
+  float chtVoltage = 0.0;
+  int total = 0;
+  int extrabits = 2;
+  int nn = pow(2, 2 * extrabits);
+  for (int i = 0; i < 16; i++)
+  {
+    total += analogRead(chtMeasurePin);
+  }
+
+  chtVoltage = (refVoltage / 1024.0) * ((float)total / 16.0);
+
+  return chtVoltage;
+}
+
+// function for calibrating cht voltage to temperature in °C
+float calibratedCht(float voltage)
+{
+  return (voltage - 1.25) / 0.005;
+}
+
+float chtReading = 0;
+void readCht()
+{
+  float chtVoltage = readChtVoltage();
+  chtReading = calibratedCht(chtVoltage);
+  if (serial_enable)
+  {
+    Serial.print("CHT: ");
+    Serial.println(chtReading);
+  }
+}
+
 void readBatteryVoltage()
 {
   measuredvbat = analogRead(VBATPIN);
@@ -122,37 +156,11 @@ void updateTacho()
       rev = 0;
     }
   }
-  rpm_filt = (1 / ww) * (rpm) + (1 - (1 / ww)) * rpm_filt;
-  throttle = map(rpm_filt, min_rpm, max_rpm, 0, 100);
-  throttle = constrain(throttle, 0, 100);
-}
-
-// Function to calculate and return the remotes battery voltage.
-//float batteryVoltage()
-//{
-//  float batteryVoltage = 0.0;
-//  int total = 0;
-//
-//  for (int i = 0; i < 16; i++)
-//  {
-//    total += analogRead(batteryMeasurePin);
-//  }
-//
-//  batteryVoltage = (refVoltage / 1024.0) * ((float)total / 16.0);
-//
-//  return batteryVoltage;
-//}
-
-void updateMainDisplay()
-{
-
-  u8g2.firstPage();
-  do
-  {
-    drawPage();
-    drawBatteryLevel();
-    drawThrottle();
-  } while (u8g2.nextPage());
+  rpm_filt = constrain((1 / ww) * (rpm) + (1 - (1 / ww)) * rpm_filt, 0, max_rpm);
+  if (serial_enable) {
+    Serial.print("rpm: ");
+    Serial.println(rpm_filt);
+  }
 }
 
 typedef struct printStruct
@@ -166,6 +174,41 @@ typedef struct printStruct
   int y;
 } printStruct;
 
+typedef struct barStruct
+{
+  float value;
+  float max;
+  float min;
+  int x;
+  int y;
+} barStruct;
+
+void updateMainDisplay()
+{
+  barStruct rpmBar;
+  rpmBar.value = rpm_filt / 1000;
+  rpmBar.x = 0;
+  rpmBar.y = 18;
+  rpmBar.max = max_rpm / 1000;
+  rpmBar.min = min_rpm / 1000;
+
+  barStruct chtBar;
+  chtBar.value = chtReading;
+  chtBar.x = 0;
+  chtBar.y = 0;
+  chtBar.max = 205;
+  chtBar.min = 0;
+
+  u8g2.firstPage();
+  do
+  {
+    drawPage();
+    drawBatteryLevel();
+    drawBar(chtBar);
+    drawBar(rpmBar);
+  } while (u8g2.nextPage());
+}
+
 void drawPage()
 {
   printStruct rpmPrint;
@@ -177,71 +220,81 @@ void drawPage()
   rpmPrint.x = 0;
   rpmPrint.y = 16;
   smallPrint(rpmPrint);
+
+  printStruct chtPrint;
+  chtPrint.value = chtReading;
+  chtPrint.suffix = "°C";
+  chtPrint.prefix = "CHT";
+  chtPrint.decimals = 0;
+  chtPrint.bigChars = 3;
+  chtPrint.x = 0;
+  chtPrint.y = 0;
+  smallPrint(chtPrint);
 }
 
-void bigPrint(struct printStruct pp)
-{
-  int first, last;
+// void bigPrint(struct printStruct pp)
+// {
+//   int first, last;
 
-  // Display prefix (title)
-  displayString = pp.prefix;
-  displayString.toCharArray(displayBuffer, 10);
-  u8g2.setFont(u8g2_font_profont12_tr);
-  u8g2.drawStr(pp.x, pp.y - 1, displayBuffer);
+//   // Display prefix (title)
+//   displayString = pp.prefix;
+//   displayString.toCharArray(displayBuffer, 10);
+//   u8g2.setFont(u8g2_font_profont12_tr);
+//   u8g2.drawStr(pp.x, pp.y - 1, displayBuffer);
 
-  // Split up the float value: a number, b decimals.
-  first = abs(floor(pp.value));
-  last = pp.value * pow(10, 2) - first * pow(10, 2);
+//   // Split up the float value: a number, b decimals.
+//   first = abs(floor(pp.value));
+//   last = pp.value * pow(10, 2) - first * pow(10, 2);
 
-  // Add leading zeros (2+bigChars-decimals)
-  if (first < pow(10, 2) && pp.bigChars > 2)
-  {
-    displayString = "0" + (String)first;
-  }
-  else
-  {
-    if (first <= 9 && pp.bigChars > 1)
-    {
-      displayString = "00" + (String)first;
-    }
-    else
-    {
-      displayString = (String)first;
-    }
-  }
+//   // Add leading zeros (2+bigChars-decimals)
+//   if (first < pow(10, 2) && pp.bigChars > 2)
+//   {
+//     displayString = "0" + (String)first;
+//   }
+//   else
+//   {
+//     if (first <= 9 && pp.bigChars > 1)
+//     {
+//       displayString = "00" + (String)first;
+//     }
+//     else
+//     {
+//       displayString = (String)first;
+//     }
+//   }
 
-  // Display numbers
-  displayString.toCharArray(displayBuffer, 10);
-  u8g2.setFont(u8g2_font_logisoso22_tn);
-  u8g2.drawStr(pp.x + 55, pp.y + 13, displayBuffer);
+//   // Display numbers
+//   displayString.toCharArray(displayBuffer, 10);
+//   u8g2.setFont(u8g2_font_logisoso22_tn);
+//   u8g2.drawStr(pp.x + 55, pp.y + 13, displayBuffer);
 
-  // Display decimals
-  displayString = ".";
+//   // Display decimals
+//   displayString = ".";
 
-  if (pp.decimals > 1)
-  {
-    if (last <= 9)
-    {
-      displayString += "0" + (String)last;
-    }
-    else
-    {
-      displayString += (String)last;
-    }
-  }
-  else
-    displayString += (String)last;
+//   if (pp.decimals > 1)
+//   {
+//     if (last <= 9)
+//     {
+//       displayString += "0" + (String)last;
+//     }
+//     else
+//     {
+//       displayString += (String)last;
+//     }
+//   }
+//   else
+//     displayString += (String)last;
 
-  displayString.toCharArray(displayBuffer, pp.decimals + 2);
-  u8g2.setFont(u8g2_font_profont12_tr);
-  u8g2.drawStr(pp.x + 86, pp.y - 1, displayBuffer);
+//   displayString.toCharArray(displayBuffer, pp.decimals + 2);
+//   u8g2.setFont(u8g2_font_profont12_tr);
+//   u8g2.drawStr(pp.x + 86, pp.y - 1, displayBuffer);
 
-  // Display suffix
-  displayString = pp.suffix;
-  displayString.toCharArray(displayBuffer, 10);
-  u8g2.setFont(u8g2_font_profont12_tr);
-  u8g2.drawStr(pp.x + 86 + 2, pp.y + 13, displayBuffer);
-}
+//   // Display suffix
+//   displayString = pp.suffix;
+//   displayString.toCharArray(displayBuffer, 10);
+//   u8g2.setFont(u8g2_font_profont12_tr);
+//   u8g2.drawStr(pp.x + 86 + 2, pp.y + 13, displayBuffer);
+// }
 
 void smallPrint(struct printStruct pp)
 {
@@ -249,7 +302,7 @@ void smallPrint(struct printStruct pp)
 
   // Split up the float value: a number, b decimals.
   first = abs(floor(pp.value));
-  last = pp.value * pow(10, 2) - first * pow(10, 2);
+  last = pp.value * pow(10, pp.decimals) - first * pow(10, pp.decimals);
 
   // Add leading zeros (2+bigChars-decimals)
   displayString = "";
@@ -267,35 +320,42 @@ void smallPrint(struct printStruct pp)
 
   // Display numbers
   displayString.toCharArray(displayBuffer, 10);
-  u8g2.setFont(u8g2_font_profont12_tr);
+  u8g2.setFont(u8g2_font_10x20_tn);
   u8g2.drawStr(pp.x + 55, pp.y + 13, displayBuffer);
 
-  // Display decimals
-  displayString = ".";
-
-  if (pp.decimals > 1)
+  // Display decimal point
+  if (pp.decimals > 0)
   {
-    if (last <= 9)
+    displayString = ".";
+    displayString.toCharArray(displayBuffer, pp.decimals + 2);
+    u8g2.setFont(u8g2_font_10x20_tn);
+    u8g2.drawStr(pp.x + 55 + 10 * (pp.bigChars) - 3, pp.y + 13, displayBuffer);
+  }
+
+  // Display decimals
+  displayString = "";
+  for (int i = 0; i < pp.decimals; i++)
+  {
+    if (first < pow(10, i))
     {
-      displayString += "0" + (String)last;
+      displayString = "0" + displayString;
     }
     else
     {
-      displayString += (String)last;
+      displayString = (String)last;
     }
   }
-  else
-    displayString += (String)last;
+  // displayString = "." + displayString;
 
   displayString.toCharArray(displayBuffer, pp.decimals + 2);
-  u8g2.setFont(u8g2_font_profont12_tr);
-  u8g2.drawStr(pp.x + 55 + 4 + 6 * (pp.bigChars - 1), pp.y + 13, displayBuffer);
+  u8g2.setFont(u8g2_font_10x20_tn);
+  u8g2.drawStr(pp.x + 55 + 10 * (pp.bigChars) - 3 + 8, pp.y + 13, displayBuffer);
 
   // Display suffix
   displayString = pp.suffix;
   displayString.toCharArray(displayBuffer, 10);
   u8g2.setFont(u8g2_font_profont12_tr);
-  u8g2.drawStr(pp.x + 55 + 6 * (pp.bigChars + pp.decimals) + 4 + 3, pp.y + 13, displayBuffer);
+  u8g2.drawStr(pp.x + 55 + 10 * (pp.bigChars + pp.decimals) - 3 + (pp.decimals>0 ? 7 : 2) + 3, pp.y + 13, displayBuffer);
 }
 
 // Function used to indicate the remotes battery level.
@@ -338,25 +398,18 @@ void drawBatteryLevel()
   }
 }
 
-void drawThrottle() //Draws Battery Level when not being used as Throttle
+void drawBar(struct barStruct pp) //Draws Battery Level when not being used as Throttle
 {
-  int inputValue = throttle;
-  int percent;
+  u8g2.drawHLine(pp.x, pp.y, 52);
+  u8g2.drawVLine(pp.x, pp.y, 10);
+  u8g2.drawVLine(pp.x + 52, pp.y, 10);
+  u8g2.drawHLine(pp.x, pp.y + 10, 5);
+  u8g2.drawHLine(pp.x + 52 - 4, pp.y + 10, 5);
 
-  int x = 0;
-  int y = 18;
-
-  // Draw throttle
-  u8g2.drawHLine(x, y, 52);
-  u8g2.drawVLine(x, y, 10);
-  u8g2.drawVLine(x + 52, y, 10);
-  u8g2.drawHLine(x, y + 10, 5);
-  u8g2.drawHLine(x + 52 - 4, y + 10, 5);
-
-  int width = map(inputValue, 0, 100, 0, 49);
+  int width = constrain(map(pp.value, pp.min, pp.max, 0, 49), 0, 49);
   for (int i = 0; i < width; i++)
   {
-    u8g2.drawVLine(x + i + 2, y + 2, 7);
+    u8g2.drawVLine(pp.x + i + 2, pp.y + 2, 7);
   }
 
   // if (throttle >= 127)
