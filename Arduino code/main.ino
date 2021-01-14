@@ -3,12 +3,14 @@
 #include <Wire.h>
 #include <microsmooth.h>
 #include <SD.h>
+#include "LowPower.h"
 
 #define serial_enable true
 
 #define VBATPIN A9
 #define CHTMEASUREPIN A1
 #define RPMPIN 0
+#define BUTTONPIN 1
 
 // Battery monitoring
 const float minVoltage = 3.2;
@@ -50,10 +52,43 @@ unsigned long lastDataRotation;
 float batteryVoltage = 0;
 float throttle = 0;
 
+bool wasSleeping = true;
+bool awake = true;
+float sleepInput = 0;
+
+void prepareSleep()
+{
+  u8g2.setPowerSave(1);
+  wasSleeping = false;
+  LowPower.powerDown(SLEEP_1S, ADC_OFF, BOD_OFF);
+}
+
+void wakeupProc()
+{
+  u8g2.setPowerSave(0);
+  u8g2.begin();
+}
+
+int checkButtonCondition()
+{
+  // if (serial_enable)
+  // {
+  //   while (Serial.available() > 0)
+  //   {
+  //     // look for the next valid integer in the incoming serial stream:
+  //     sleepInput = Serial.parseInt();
+  //   }
+  // }
+  // return sleepInput > 0;
+  return digitalRead(BUTTONPIN);
+}
+
 void setup()
 {
   pinMode(RPMPIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(RPMPIN), rpm_isr, FALLING);
+
+  pinMode(BUTTONPIN, INPUT_PULLUP);
 
   // initialize serial:
   if (serial_enable)
@@ -62,35 +97,78 @@ void setup()
   }
 
   Wire.setClock(400000);
-  u8g2.begin();
+  wakeupProc();
 }
 
 long tt_loop = 0;
 long loopUpdateTime = 10;
+long tt_button = 0;
+long dt_button = 500;
 
 void loop()
 {
-  if (serial_enable)
+  if (checkButtonCondition() == 0)
   {
-    while (Serial.available() > 0)
+    bool switchSleepState = true;
+    // stop everything for 1s while checking button is still down
+    tt_button = millis();
+    while (millis() - tt_button < dt_button)
+      if (checkButtonCondition() > 0)
+        switchSleepState = false;
+
+    // if after 1 second button is still down, switch sleep state
+    if (switchSleepState)
     {
-      // look for the next valid integer in the incoming serial stream:
-      rev = Serial.parseInt();
-      if (Serial.read() == '\n')
+      if (awake)
       {
-        Serial.println(rev, HEX);
+        prepareSleep();
+        awake = false;
+      }
+      else
+      {
+        wakeupProc();
+        awake = true;
       }
     }
-    // Serial.println(rpm_filt);
   }
-  if (millis() - tt_loop > loopUpdateTime)
+
+  // if (checkButtonCondition())
+  // {
+  //   prepareSleep();
+  //   LowPower.idle(SLEEP_2S, ADC_OFF, TIMER4_OFF, TIMER3_OFF, TIMER1_OFF, TIMER0_OFF, SPI_OFF, USART1_OFF, TWI_OFF, USB_OFF);
+  // }
+  // else
+  // {
+  //   if (wasSleeping)
+  //   {
+  //     wakeupProc();
+  //     wasSleeping = false;
+  //   }
+
+  if (awake)
   {
-    updateTacho();
-    readCht();
-    readBatteryVoltage();
-    readCht();
-    updateMainDisplay();
-    tt_loop = millis();
+    if (serial_enable)
+    {
+      while (Serial.available() > 0)
+      {
+        // look for the next valid integer in the incoming serial stream:
+        rev = Serial.parseInt();
+        if (Serial.read() == '\n')
+        {
+          Serial.println(rev, HEX);
+        }
+      }
+      // Serial.println(rpm_filt);
+    }
+    if (millis() - tt_loop > loopUpdateTime)
+    {
+      updateTacho();
+      readCht();
+      readBatteryVoltage();
+      readCht();
+      updateMainDisplay();
+      tt_loop = millis();
+    }
   }
 }
 
@@ -100,7 +178,7 @@ float readChtVoltage()
   float chtVoltage = 0.0;
   int total = 0;
   int extrabits = 2;
-  
+
   int nn = pow(2, 2 * extrabits);
   for (int i = 0; i < 16; i++)
   {
