@@ -194,15 +194,13 @@ void displayTime() {
   u8g2.setFont(u8g2_font_profont10_mn);
   u8g2.drawStr(x, y, buffer);
 
-
-  snprintf(
-      buffer, sizeof(buffer), "%02d:%02d:%02d",
-      int(total_runtime / 3600000.0),
-      int(total_runtime / 60000.0) - int(total_runtime / 3600000.0) * 60,
-      int(total_runtime / 1000.0) - int(total_runtime / 60000.0) * 60);
+  snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d",
+           int(total_runtime / 3600000.0),
+           int(total_runtime / 60000.0) - int(total_runtime / 3600000.0) * 60,
+           int(total_runtime / 1000.0) - int(total_runtime / 60000.0) * 60);
 
   u8g2.setFont(u8g2_font_profont10_mn);
-  u8g2.drawStr(x, y+8, buffer);
+  u8g2.drawStr(x, y + 8, buffer);
 
   // Serial.print("total runtime: ");
   // Serial.println(total_runtime);
@@ -321,7 +319,7 @@ void updateMainDisplay() {
 
   printStruct rpmPrint;
   rpmPrint.value = rpm_filt / 1000;
-  rpmPrint.suffix = "kr";
+  rpmPrint.suffix = "krpm";
   rpmPrint.prefix = "REVS";
   rpmPrint.decimals = 1;
   rpmPrint.bigChars = 1;
@@ -330,7 +328,8 @@ void updateMainDisplay() {
 
   printStruct chtPrint;
   chtPrint.value = chtReading;
-  chtPrint.suffix = "°C";
+  chtPrint.suffix = "\xB0";
+  chtPrint.suffix += "C";
   chtPrint.prefix = "CHT";
   chtPrint.decimals = 0;
   chtPrint.bigChars = 3;
@@ -461,11 +460,25 @@ void smallPrint(struct printStruct pp) {
 
   // Display suffix
   displayString = pp.suffix;
-  displayString.toCharArray(displayBuffer, 10);
-  u8g2.setFont(u8g2_font_profont12_tr);
-  u8g2.drawStr(pp.x + 55 + 10 * (pp.bigChars + pp.decimals) - 3 +
-                   (pp.decimals > 0 ? 8 : 2) + 3,
-               pp.y + 13, displayBuffer);
+  if (displayString.length() < 3) {
+    displayString.toCharArray(displayBuffer, 10);
+    u8g2.setFont(u8g2_font_profont12_mf);
+    u8g2.drawStr(pp.x + 55 + 10 * (pp.bigChars + pp.decimals) - 3 +
+                     (pp.decimals > 0 ? 8 : 2) + 2,
+                 pp.y + 13, displayBuffer);
+  } else {
+    displayString.substring(0, 2).toCharArray(displayBuffer, 10);
+    u8g2.setFont(u8g2_font_profont10_tr);
+    u8g2.drawStr(pp.x + 55 + 10 * (pp.bigChars + pp.decimals) - 3 +
+                     (pp.decimals > 0 ? 8 : 2) + 2,
+                 pp.y + 13 - 6, displayBuffer);
+
+    displayString.substring(2).toCharArray(displayBuffer, 10);
+    u8g2.setFont(u8g2_font_profont10_tr);
+    u8g2.drawStr(pp.x + 55 + 10 * (pp.bigChars + pp.decimals) - 3 +
+                     (pp.decimals > 0 ? 8 : 2) + 2,
+                 pp.y + 13, displayBuffer);
+  }
 }
 
 // Function used to indicate the remotes battery level.
