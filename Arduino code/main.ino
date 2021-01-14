@@ -1,8 +1,8 @@
-#include <U8g2lib.h>
+#include <EEPROM.h>
 #include <SPI.h>
+#include <U8g2lib.h>
 #include <Wire.h>
-#include <microsmooth.h>
-#include <SD.h>
+
 #include "LowPower.h"
 
 #define serial_enable true
@@ -23,7 +23,8 @@ const float max_rpm = 8000;
 const long updatet = 20;
 
 float rpm_filt = 0;
-float ww = 2; // filter weight. larger numbers -> slower filters. 40 is ..s, 1 is no filtering
+float ww = 2;  // filter weight. larger numbers -> slower filters. 40 is ..s, 1
+               // is no filtering
 
 // defines for tacho: Timer auxiliary variables
 unsigned long tt = millis();
@@ -56,43 +57,59 @@ bool wasSleeping = true;
 bool awake = true;
 float sleepInput = 0;
 
-void prepareSleep()
-{
+// time variables
+long tt_loop = 0;
+long loopUpdateTime = 10;
+long tt_button = 0;
+long dt_button = 500;
+
+unsigned long tt_running = 0;
+unsigned long current_runtime = 0;
+unsigned long total_runtime = 0;
+
+long EEPROMReadlong(long address) {
+  long four = EEPROM.read(address);
+  long three = EEPROM.read(address + 1);
+  long two = EEPROM.read(address + 2);
+  long one = EEPROM.read(address + 3);
+
+  return ((four << 0) & 0xFF) + ((three << 8) & 0xFFFF) +
+         ((two << 16) & 0xFFFFFF) + ((one << 24) & 0xFFFFFFFF);
+}
+
+void EEPROMWritelong(int address, long value) {
+  byte four = (value & 0xFF);
+  byte three = ((value >> 8) & 0xFF);
+  byte two = ((value >> 16) & 0xFF);
+  byte one = ((value >> 24) & 0xFF);
+
+  EEPROM.write(address, four);
+  EEPROM.write(address + 1, three);
+  EEPROM.write(address + 2, two);
+  EEPROM.write(address + 3, one);
+}
+
+void prepareSleep() {
   u8g2.setPowerSave(1);
   wasSleeping = false;
+  EEPROMWritelong(0, total_runtime);
   LowPower.powerDown(SLEEP_1S, ADC_OFF, BOD_OFF);
 }
 
-void wakeupProc()
-{
+void wakeupProc() {
   u8g2.setPowerSave(0);
   u8g2.begin();
+  total_runtime = EEPROMReadlong(0);
 }
 
-int checkButtonCondition()
-{
-  // if (serial_enable)
-  // {
-  //   while (Serial.available() > 0)
-  //   {
-  //     // look for the next valid integer in the incoming serial stream:
-  //     sleepInput = Serial.parseInt();
-  //   }
-  // }
-  // return sleepInput > 0;
-  return digitalRead(BUTTONPIN);
-}
-
-void setup()
-{
+void setup() {
   pinMode(RPMPIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(RPMPIN), rpm_isr, FALLING);
 
   pinMode(BUTTONPIN, INPUT_PULLUP);
 
   // initialize serial:
-  if (serial_enable)
-  {
+  if (serial_enable) {
     Serial.begin(115200);
   }
 
@@ -100,68 +117,46 @@ void setup()
   wakeupProc();
 }
 
-long tt_loop = 0;
-long loopUpdateTime = 10;
-long tt_button = 0;
-long dt_button = 500;
-
-void loop()
-{
-  if (checkButtonCondition() == 0)
-  {
+void loop() {
+  // check sleep status
+  if (digitalRead(BUTTONPIN) == LOW) {
     bool switchSleepState = true;
     // stop everything for 1s while checking button is still down
     tt_button = millis();
-    while (millis() - tt_button < dt_button)
-      if (checkButtonCondition() > 0)
-        switchSleepState = false;
+    do {
+      if (digitalRead(BUTTONPIN) == HIGH) switchSleepState = false;
+    } while (millis() - tt_button < dt_button);
 
     // if after 1 second button is still down, switch sleep state
-    if (switchSleepState)
-    {
-      if (awake)
-      {
+    if (switchSleepState) {
+      if (awake) {
         prepareSleep();
         awake = false;
-      }
-      else
-      {
+      } else {
         wakeupProc();
         awake = true;
       }
     }
   }
 
-  // if (checkButtonCondition())
-  // {
-  //   prepareSleep();
-  //   LowPower.idle(SLEEP_2S, ADC_OFF, TIMER4_OFF, TIMER3_OFF, TIMER1_OFF, TIMER0_OFF, SPI_OFF, USART1_OFF, TWI_OFF, USB_OFF);
-  // }
-  // else
-  // {
-  //   if (wasSleeping)
-  //   {
-  //     wakeupProc();
-  //     wasSleeping = false;
-  //   }
-
-  if (awake)
-  {
-    if (serial_enable)
-    {
-      while (Serial.available() > 0)
-      {
+  // waking code
+  if (awake) {
+    if (serial_enable) {
+      while (Serial.available() > 0) {
         // look for the next valid integer in the incoming serial stream:
         rev = Serial.parseInt();
-        if (Serial.read() == '\n')
-        {
+        if (Serial.read() == '\n') {
           Serial.println(rev, HEX);
+          if (rev < 0) {
+            total_runtime = -rev;
+            Serial.println("resetting total_runtime");
+          }
         }
       }
       // Serial.println(rpm_filt);
     }
-    if (millis() - tt_loop > loopUpdateTime)
-    {
+    if (millis() - tt_loop > loopUpdateTime) {
+      updateRunningTime();
       updateTacho();
       readCht();
       readBatteryVoltage();
@@ -172,16 +167,73 @@ void loop()
   }
 }
 
+void updateRunningTime() {
+  if (rpm_filt > min_rpm) {
+    unsigned int dt = millis() - tt_running;
+    tt_running = millis();
+    current_runtime += dt;
+    total_runtime += dt;
+  } else {
+    current_runtime = 0;
+    tt_running = millis();
+  }
+}
+
+void displayTime() {
+  // int x = 89;
+  // int y = 22;
+  int x = 104;
+  int y = 22;
+  char buffer[10];  // make this big enough to hold the resulting string
+  snprintf(
+      buffer, sizeof(buffer), "%02d:%02d:%02d",
+      int(current_runtime / 3600000.0),
+      int(current_runtime / 60000.0) - int(current_runtime / 3600000.0) * 60,
+      int(current_runtime / 1000.0) - int(current_runtime / 60000.0) * 60);
+
+  u8g2.setFont(u8g2_font_profont10_mn);
+  u8g2.drawStr(x, y, buffer);
+
+
+  snprintf(
+      buffer, sizeof(buffer), "%02d:%02d:%02d",
+      int(total_runtime / 3600000.0),
+      int(total_runtime / 60000.0) - int(total_runtime / 3600000.0) * 60,
+      int(total_runtime / 1000.0) - int(total_runtime / 60000.0) * 60);
+
+  u8g2.setFont(u8g2_font_profont10_mn);
+  u8g2.drawStr(x, y+8, buffer);
+
+  // Serial.print("total runtime: ");
+  // Serial.println(total_runtime);
+  // buffer[10];  // make this big enough to hold the resulting string
+  // snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d",
+  //          int(total_runtime / 3600000.0),
+  //          int(total_runtime / 60000.0) - int(total_runtime / 3600000.0) *
+  //          60, int(total_runtime / 1000.0) - int(total_runtime / 60000.0) *
+  //          60);
+  // Serial.println(buffer);
+
+  // time to OLED
+  // displayString = "";
+  // for (int i = 0; i < pp.decimals; i++) {
+  //   if (last < pow(10, i)) {
+  //     displayString = "0" + displayString;
+  //   } else {
+  //     displayString = (String)last;
+  //   }
+  // }
+  // // displayString = "." + displayString;
+}
+
 // Function to calculate and return the thermocouple reading.
-float readChtVoltage()
-{
+float readChtVoltage() {
   float chtVoltage = 0.0;
   int total = 0;
   int extrabits = 2;
 
   int nn = pow(2, 2 * extrabits);
-  for (int i = 0; i < 16; i++)
-  {
+  for (int i = 0; i < 16; i++) {
     total += analogRead(CHTMEASUREPIN);
   }
 
@@ -191,64 +243,50 @@ float readChtVoltage()
 }
 
 // function for calibrating cht voltage to temperature in °C
-float calibratedCht(float voltage)
-{
-  return (voltage - 1.25) / 0.005;
-}
+float calibratedCht(float voltage) { return (voltage - 1.25) / 0.005; }
 
 float chtReading = 0;
-void readCht()
-{
+void readCht() {
   float chtVoltage = readChtVoltage();
   chtReading = calibratedCht(chtVoltage);
-  if (serial_enable)
-  {
+  if (serial_enable) {
     Serial.print("CHT: ");
     Serial.println(chtReading);
   }
 }
 
-void readBatteryVoltage()
-{
+void readBatteryVoltage() {
   batteryVoltage = analogRead(VBATPIN);
-  batteryVoltage *= 2;          // we divided by 2, so multiply back
-  batteryVoltage *= refVoltage; // Multiply by 3.3V, our reference voltage
-  batteryVoltage /= 1024.0;     // convert to voltage
+  batteryVoltage *= 2;           // we divided by 2, so multiply back
+  batteryVoltage *= refVoltage;  // Multiply by 3.3V, our reference voltage
+  batteryVoltage /= 1024.0;      // convert to voltage
 
-  if (serial_enable)
-  {
+  if (serial_enable) {
     Serial.print("VBat: ");
     Serial.println(batteryVoltage);
   }
 }
 
-void rpm_isr()
-{
-  rev++;
-}
+void rpm_isr() { rev++; }
 
-void updateTacho()
-{
+void updateTacho() {
   dt = micros() - oldtime;
   oldtime = micros();
-  if (dt > 0)
-  {
+  if (dt > 0) {
     rpm = (rev / dt) * 60000000;
-    if (!serial_enable)
-    {
+    if (!serial_enable) {
       rev = 0;
     }
   }
-  rpm_filt = constrain((1 / ww) * (rpm) + (1 - (1 / ww)) * rpm_filt, 0, max_rpm);
-  if (serial_enable)
-  {
+  rpm_filt =
+      constrain((1 / ww) * (rpm) + (1 - (1 / ww)) * rpm_filt, 0, max_rpm);
+  if (serial_enable) {
     Serial.print("rpm: ");
     Serial.println(rpm_filt);
   }
 }
 
-typedef struct printStruct
-{
+typedef struct printStruct {
   float value;
   String suffix;
   String prefix;
@@ -258,8 +296,7 @@ typedef struct printStruct
   int y;
 } printStruct;
 
-typedef struct barStruct
-{
+typedef struct barStruct {
   float value;
   float max;
   float min;
@@ -267,8 +304,7 @@ typedef struct barStruct
   int y;
 } barStruct;
 
-void updateMainDisplay()
-{
+void updateMainDisplay() {
   barStruct rpmBar;
   rpmBar.value = rpm_filt / 1000;
   rpmBar.x = 0;
@@ -283,27 +319,14 @@ void updateMainDisplay()
   chtBar.max = 205;
   chtBar.min = 0;
 
-  u8g2.firstPage();
-  do
-  {
-    drawPage();
-    drawBatteryLevel();
-    drawBar(chtBar);
-    drawBar(rpmBar);
-  } while (u8g2.nextPage());
-}
-
-void drawPage()
-{
   printStruct rpmPrint;
   rpmPrint.value = rpm_filt / 1000;
-  rpmPrint.suffix = "krpm";
+  rpmPrint.suffix = "kr";
   rpmPrint.prefix = "REVS";
   rpmPrint.decimals = 1;
   rpmPrint.bigChars = 1;
   rpmPrint.x = 0;
   rpmPrint.y = 16;
-  smallPrint(rpmPrint);
 
   printStruct chtPrint;
   chtPrint.value = chtReading;
@@ -313,7 +336,16 @@ void drawPage()
   chtPrint.bigChars = 3;
   chtPrint.x = 0;
   chtPrint.y = 0;
-  smallPrint(chtPrint);
+
+  u8g2.firstPage();
+  do {
+    smallPrint(rpmPrint);
+    smallPrint(chtPrint);
+    displayTime();
+    drawBatteryLevel();
+    drawBar(chtBar);
+    drawBar(rpmBar);
+  } while (u8g2.nextPage());
 }
 
 // void bigPrint(struct printStruct pp)
@@ -380,24 +412,20 @@ void drawPage()
 //   u8g2.drawStr(pp.x + 86 + 2, pp.y + 13, displayBuffer);
 // }
 
-void smallPrint(struct printStruct pp)
-{
+void smallPrint(struct printStruct pp) {
   int first, last;
 
   // Split up the float value: a number, b decimals.
   first = abs(floor(pp.value));
-  last = abs(floor(pp.value * pow(10, pp.decimals) - first * pow(10, pp.decimals)));
+  last = abs(
+      floor(pp.value * pow(10, pp.decimals) - first * pow(10, pp.decimals)));
 
   // Add leading zeros (2+bigChars-decimals)
   displayString = "";
-  for (int i = 0; i < pp.bigChars; i++)
-  {
-    if (first < pow(10, i))
-    {
+  for (int i = 0; i < pp.bigChars; i++) {
+    if (first < pow(10, i)) {
       displayString = "0" + displayString;
-    }
-    else
-    {
+    } else {
       displayString = (String)first;
     }
   }
@@ -408,24 +436,19 @@ void smallPrint(struct printStruct pp)
   u8g2.drawStr(pp.x + 55, pp.y + 13, displayBuffer);
 
   // Display decimal point
-  if (pp.decimals > 0)
-  {
+  if (pp.decimals > 0) {
     displayString = ".";
-    displayString.toCharArray(displayBuffer, pp.decimals + 2);
+    displayString.toCharArray(displayBuffer, 10);
     u8g2.setFont(u8g2_font_10x20_tn);
     u8g2.drawStr(pp.x + 55 + 10 * (pp.bigChars) - 3, pp.y + 13, displayBuffer);
   }
 
   // Display decimals
   displayString = "";
-  for (int i = 0; i < pp.decimals; i++)
-  {
-    if (last < pow(10, i))
-    {
+  for (int i = 0; i < pp.decimals; i++) {
+    if (last < pow(10, i)) {
       displayString = "0" + displayString;
-    }
-    else
-    {
+    } else {
       displayString = (String)last;
     }
   }
@@ -433,37 +456,22 @@ void smallPrint(struct printStruct pp)
 
   displayString.toCharArray(displayBuffer, pp.decimals + 2);
   u8g2.setFont(u8g2_font_10x20_tn);
-  u8g2.drawStr(pp.x + 55 + 10 * (pp.bigChars) - 3 + 8, pp.y + 13, displayBuffer);
+  u8g2.drawStr(pp.x + 55 + 10 * (pp.bigChars) - 3 + 8, pp.y + 13,
+               displayBuffer);
 
   // Display suffix
   displayString = pp.suffix;
   displayString.toCharArray(displayBuffer, 10);
   u8g2.setFont(u8g2_font_profont12_tr);
-  u8g2.drawStr(pp.x + 55 + 10 * (pp.bigChars + pp.decimals) - 3 + (pp.decimals > 0 ? 8 : 2) + 3, pp.y + 13, displayBuffer);
+  u8g2.drawStr(pp.x + 55 + 10 * (pp.bigChars + pp.decimals) - 3 +
+                   (pp.decimals > 0 ? 8 : 2) + 3,
+               pp.y + 13, displayBuffer);
 }
 
 // Function used to indicate the remotes battery level.
-int batteryLevel()
-{
-  float voltage = batteryVoltage;
-
-  if (voltage <= minVoltage)
-  {
-    return 0;
-  }
-  else if (voltage >= maxVoltage)
-  {
-    return 100;
-  }
-  else
-  {
-    return (voltage - minVoltage) * 100 / (maxVoltage - minVoltage);
-  }
-}
-
-void drawBatteryLevel()
-{
-  int level = batteryLevel();
+void drawBatteryLevel() {
+  int level = constrain(
+      (batteryVoltage - minVoltage) * 100 / (maxVoltage - minVoltage), 0, 100);
 
   // Position on OLED
   int x = 108;
@@ -472,17 +480,16 @@ void drawBatteryLevel()
   u8g2.drawFrame(x + 2, y, 18, 9);
   u8g2.drawBox(x, y + 2, 2, 5);
 
-  for (int i = 0; i < 5; i++)
-  {
+  for (int i = 0; i < 5; i++) {
     int p = round((100 / 5) * i);
-    if (p < level)
-    {
+    if (p < level) {
       u8g2.drawBox(x + 4 + (3 * i), y + 2, 2, 5);
     }
   }
 }
 
-void drawBar(struct barStruct pp) //Draws Battery Level when not being used as Throttle
+void drawBar(
+    struct barStruct pp)  // Draws Battery Level when not being used as Throttle
 {
   u8g2.drawHLine(pp.x, pp.y, 52);
   u8g2.drawVLine(pp.x, pp.y, 10);
@@ -491,8 +498,7 @@ void drawBar(struct barStruct pp) //Draws Battery Level when not being used as T
   u8g2.drawHLine(pp.x + 52 - 4, pp.y + 10, 5);
 
   int width = constrain(map(pp.value, pp.min, pp.max, 0, 49), 0, 49);
-  for (int i = 0; i < width; i++)
-  {
+  for (int i = 0; i < width; i++) {
     u8g2.drawVLine(pp.x + i + 2, pp.y + 2, 7);
   }
 
