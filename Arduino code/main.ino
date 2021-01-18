@@ -5,12 +5,13 @@
 
 #include "LowPower.h"
 
-#define serial_enable true
-
 #define VBATPIN A9
 #define CHTMEASUREPIN A1
 #define RPMPIN 0
 #define BUTTONPIN 1
+
+// uncomment this for dev mode
+#define DEVMODE 1
 
 // Battery monitoring
 const float minVoltage = 3.2;
@@ -37,7 +38,7 @@ unsigned long lastTrigger = 0;
 boolean startTimer = false;
 
 // Defining the type of display used (128x32)
-U8G2_SSD1306_128X32_UNIVISION_1_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
+U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 
 // Pin definition
 // const int chargeMeasurePin = A1;
@@ -62,6 +63,8 @@ long tt_loop = 0;
 long loopUpdateTime = 10;
 long tt_button = 0;
 long dt_button = 500;
+long tt_slowdraw = 0;
+long dt_slowdraw = 1000;
 
 unsigned long tt_running = 0;
 unsigned long current_runtime = 0;
@@ -109,9 +112,10 @@ void setup() {
   pinMode(BUTTONPIN, INPUT_PULLUP);
 
   // initialize serial:
-  if (serial_enable) {
-    Serial.begin(115200);
-  }
+#if defined(DEVMODE)
+  Serial.begin(115200);
+  Serial.print("Devmode ON");
+#endif
 
   Wire.setClock(400000);
   wakeupProc();
@@ -141,20 +145,21 @@ void loop() {
 
   // waking code
   if (awake) {
-    if (serial_enable) {
-      while (Serial.available() > 0) {
-        // look for the next valid integer in the incoming serial stream:
-        rev = Serial.parseInt();
-        if (Serial.read() == '\n') {
-          Serial.println(rev, HEX);
-          if (rev < 0) {
-            total_runtime = -rev;
-            Serial.println("resetting total_runtime");
-          }
+#if defined(DEVMODE)
+    while (Serial.available() > 0) {
+      // look for the next valid integer in the incoming serial stream:
+      rev = Serial.parseInt();
+      if (Serial.read() == '\n') {
+        Serial.println(rev);
+        if (rev < 0) {
+          total_runtime = -rev;
+          Serial.print("resetting total_runtime: ");
+          Serial.println(total_runtime);
         }
       }
-      // Serial.println(rpm_filt);
     }
+    // Serial.println(rpm_filt);
+#endif
     if (millis() - tt_loop > loopUpdateTime) {
       updateRunningTime();
       updateTacho();
@@ -247,10 +252,10 @@ float chtReading = 0;
 void readCht() {
   float chtVoltage = readChtVoltage();
   chtReading = calibratedCht(chtVoltage);
-  if (serial_enable) {
-    Serial.print("CHT: ");
-    Serial.println(chtReading);
-  }
+#if defined(DEVMODE)
+  Serial.print("CHT: ");
+  Serial.println(chtReading);
+#endif
 }
 
 void readBatteryVoltage() {
@@ -259,10 +264,10 @@ void readBatteryVoltage() {
   batteryVoltage *= refVoltage;  // Multiply by 3.3V, our reference voltage
   batteryVoltage /= 1024.0;      // convert to voltage
 
-  if (serial_enable) {
-    Serial.print("VBat: ");
-    Serial.println(batteryVoltage);
-  }
+#if defined(DEVMODE)
+  Serial.print("VBat: ");
+  Serial.println(batteryVoltage);
+#endif
 }
 
 void rpm_isr() { rev++; }
@@ -272,16 +277,16 @@ void updateTacho() {
   oldtime = micros();
   if (dt > 0) {
     rpm = (rev / dt) * 60000000;
-    if (!serial_enable) {
-      rev = 0;
-    }
+#if !defined(DEVMODE)
+    rev = 0;
+#endif
   }
   rpm_filt =
       constrain((1 / ww) * (rpm) + (1 - (1 / ww)) * rpm_filt, 0, max_rpm);
-  if (serial_enable) {
-    Serial.print("rpm: ");
-    Serial.println(rpm_filt);
-  }
+#if defined(DEVMODE)
+  Serial.print("rpm: ");
+  Serial.println(rpm_filt);
+#endif
 }
 
 typedef struct printStruct {
@@ -336,15 +341,19 @@ void updateMainDisplay() {
   chtPrint.x = 0;
   chtPrint.y = 0;
 
-  u8g2.firstPage();
-  do {
+  // u8g2.firstPage();
+  // do {
     smallPrint(rpmPrint);
+    drawBar(chtBar);
+    drawBar(rpmBar);
+    // if (millis() - tt_slowdraw > dt_slowdraw) {
+    // tt_slowdraw = millis();
     smallPrint(chtPrint);
     displayTime();
     drawBatteryLevel();
-    drawBar(chtBar);
-    drawBar(rpmBar);
-  } while (u8g2.nextPage());
+    u8g2.sendBuffer();
+    // }
+  // } while (u8g2.nextPage());
 }
 
 // void bigPrint(struct printStruct pp)
@@ -488,7 +497,7 @@ void drawBatteryLevel() {
 
   // Position on OLED
   int x = 108;
-  int y = 4;
+  int y = 0;
 
   u8g2.drawFrame(x + 2, y, 18, 9);
   u8g2.drawBox(x, y + 2, 2, 5);
