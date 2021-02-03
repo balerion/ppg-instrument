@@ -17,7 +17,7 @@
 
 
 // uncomment this for dev mode
-#define DEVMODE 1
+// #define DEVMODE 1
 
 // Battery monitoring
 const float minVoltage = 3.2;
