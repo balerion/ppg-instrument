@@ -5,13 +5,19 @@
 
 #include "LowPower.h"
 
+
+
+// Pin definition
 #define VBATPIN A9
 #define CHTMEASUREPIN A1
 #define RPMPIN 0
 #define BUTTONPIN 1
+#define RPMPOWER A2
+#define CHTPOWER A3
+
 
 // uncomment this for dev mode
-#define DEVMODE 1
+// #define DEVMODE 1
 
 // Battery monitoring
 const float minVoltage = 3.2;
@@ -40,10 +46,6 @@ boolean startTimer = false;
 // Defining the type of display used (128x32)
 U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 
-// Pin definition
-// const int chargeMeasurePin = A1;
-// const int batteryMeasurePin = A2;
-const int chtMeasurePin = A1;
 
 // Defining variables for OLED display
 char displayBuffer[20];
@@ -94,6 +96,10 @@ void EEPROMWritelong(int address, long value) {
 
 void prepareSleep() {
   u8g2.setPowerSave(1);
+  pinMode(RPMPOWER, INPUT);
+  pinMode(CHTPOWER, INPUT);
+  digitalWrite(RPMPOWER, LOW);
+  digitalWrite(CHTPOWER, LOW);
   wasSleeping = false;
   EEPROMWritelong(0, total_runtime);
   LowPower.powerDown(SLEEP_1S, ADC_OFF, BOD_OFF);
@@ -102,6 +108,10 @@ void prepareSleep() {
 void wakeupProc() {
   u8g2.setPowerSave(0);
   u8g2.begin();
+  pinMode(RPMPOWER, OUTPUT);
+  pinMode(CHTPOWER, OUTPUT);
+  digitalWrite(RPMPOWER, HIGH);
+  digitalWrite(CHTPOWER, HIGH);
   total_runtime = EEPROMReadlong(0);
 }
 
@@ -343,16 +353,16 @@ void updateMainDisplay() {
 
   // u8g2.firstPage();
   // do {
-    smallPrint(rpmPrint);
-    drawBar(chtBar);
-    drawBar(rpmBar);
-    // if (millis() - tt_slowdraw > dt_slowdraw) {
-    // tt_slowdraw = millis();
-    smallPrint(chtPrint);
-    displayTime();
-    drawBatteryLevel();
-    u8g2.sendBuffer();
-    // }
+  smallPrint(rpmPrint);
+  drawBar(chtBar);
+  drawBar(rpmBar);
+  // if (millis() - tt_slowdraw > dt_slowdraw) {
+  // tt_slowdraw = millis();
+  smallPrint(chtPrint);
+  displayTime();
+  drawBatteryLevel();
+  u8g2.sendBuffer();
+  // }
   // } while (u8g2.nextPage());
 }
 
@@ -502,6 +512,10 @@ void drawBatteryLevel() {
   u8g2.drawFrame(x + 2, y, 18, 9);
   u8g2.drawBox(x, y + 2, 2, 5);
 
+  u8g2.setDrawColor(0);
+  u8g2.drawBox(x + 3, y + 1, 16, 7);
+  u8g2.setDrawColor(1);
+
   for (int i = 0; i < 5; i++) {
     int p = round((100 / 5) * i);
     if (p < level) {
@@ -513,6 +527,9 @@ void drawBatteryLevel() {
 void drawBar(
     struct barStruct pp)  // Draws Battery Level when not being used as Throttle
 {
+  u8g2.setDrawColor(0);
+  u8g2.drawBox(pp.x + 1, pp.y + 1, 50, 8);
+  u8g2.setDrawColor(1);
   u8g2.drawHLine(pp.x, pp.y, 52);
   u8g2.drawVLine(pp.x, pp.y, 10);
   u8g2.drawVLine(pp.x + 52, pp.y, 10);
