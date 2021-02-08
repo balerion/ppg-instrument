@@ -5,8 +5,6 @@
 
 #include "LowPower.h"
 
-
-
 // Pin definition
 #define VBATPIN A9
 #define CHTMEASUREPIN A1
@@ -14,7 +12,6 @@
 #define BUTTONPIN 1
 #define RPMPOWER A2
 #define CHTPOWER A3
-
 
 // uncomment this for dev mode
 #define DEVMODE 1
@@ -45,7 +42,6 @@ boolean startTimer = false;
 
 // Defining the type of display used (128x32)
 U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
-
 
 // Defining variables for OLED display
 char displayBuffer[20];
@@ -179,6 +175,9 @@ void loop() {
       updateMainDisplay();
       tt_loop = millis();
     }
+  } else {
+    prepareSleep();
+    awake = false;
   }
 }
 
