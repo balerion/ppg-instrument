@@ -115,6 +115,12 @@ void prepareSleep() {
 void wakeupProc() {
   u8g2.setPowerSave(0);
 
+  u8g2.clearBuffer();
+  u8g2.drawXBMP(0, 0, mouth1_width, mouth1_height, mouth1_bits);
+  u8g2.sendBuffer();
+  delay(2000);
+  u8g2.clearBuffer();
+  
   pinMode(RPMPOWER, OUTPUT);
   pinMode(CHTPOWER, OUTPUT);
   pinMode(LED_BUILTIN, OUTPUT);
