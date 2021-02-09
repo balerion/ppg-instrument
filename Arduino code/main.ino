@@ -1,4 +1,3 @@
-// #include <EEPROM.h>
 #include <SPI.h>
 #include <U8g2lib.h>
 #include <Wire.h>
@@ -17,7 +16,7 @@
 const int chipSelect = 4;
 
 // uncomment this for dev mode
-#define DEVMODE 1
+//#define DEVMODE 1
 
 // SAMD serial port adaptation
 #if defined(ARDUINO_SAMD_ZERO) && defined(SERIAL_PORT_USBVIRTUAL)
@@ -86,9 +85,9 @@ void error(uint8_t errno) {
   while (1) {
     uint8_t i;
     for (i = 0; i < errno; i++) {
-      digitalWrite(13, HIGH);
+      digitalWrite(LED_BUILTIN, HIGH);
       delay(100);
-      digitalWrite(13, LOW);
+      digitalWrite(LED_BUILTIN, LOW);
       delay(100);
     }
     for (i = errno; i < 10; i++) {
@@ -97,6 +96,7 @@ void error(uint8_t errno) {
   }
 }
 
+// sleepy function
 void prepareSleep() {
   u8g2.setPowerSave(1);
   pinMode(RPMPOWER, INPUT);
@@ -111,10 +111,13 @@ void prepareSleep() {
   LowPower.deepSleep(1000);
 }
 
+// wakeup function
 void wakeupProc() {
   u8g2.setPowerSave(0);
+
   pinMode(RPMPOWER, OUTPUT);
   pinMode(CHTPOWER, OUTPUT);
+  pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(RPMPOWER, HIGH);
   digitalWrite(CHTPOWER, HIGH);
 
@@ -151,14 +154,13 @@ void wakeupProc() {
   logfile = SD.open(filename, FILE_WRITE);
   logfile.seek(EOF);
   if (!logfile) {
-  #if defined(DEVMODE)
+#if defined(DEVMODE)
     Serial.print("Couldnt open for write ");
     Serial.println(filename);
-  #endif
+#endif
     error(3);
   }
 
-  pinMode(13, OUTPUT);
   // total_runtime = EEPROMReadlong(0);
 }
 
@@ -338,15 +340,20 @@ void readBatteryVoltage() {
 #endif
 }
 
-void rpm_isr() { rev++; }
+void rpm_isr() {
+  dt = micros() - oldtime;
+  if (rev == 0) {
+    oldtime = micros();
+  }
+  rev++;
+}
 
 void updateTacho() {
-  dt = micros() - oldtime;
-  oldtime = micros();
+  // dt = micros() - oldtime;
   if (dt > 0) {
     rpm = (rev / dt) * 60000000;
 #if !defined(DEVMODE)
-    rev = 1;
+    rev = 0;
 #endif
   }
   rpm_filt =
