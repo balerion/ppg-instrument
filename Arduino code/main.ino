@@ -4,6 +4,7 @@
 
 #include "ArduinoLowPower.h"
 #include "SD.h"
+#include "src/graphics.h"
 
 // Pin definition
 #define VBATPIN A7
@@ -13,10 +14,10 @@
 #define RPMPOWER A2
 #define CHTPOWER A3
 
-const int chipSelect = 4;
+#define chipSelect 4
 
 // uncomment this for dev mode
-//#define DEVMODE 1
+// #define DEVMODE 1
 
 // SAMD serial port adaptation
 #if defined(ARDUINO_SAMD_ZERO) && defined(SERIAL_PORT_USBVIRTUAL)
@@ -61,9 +62,7 @@ bool awake = true;
 float sleepInput = 0;
 
 // Defining the type of display used (128x32)
-U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(
-    U8G2_R0, /* reset=*/U8X8_PIN_NONE);  // Adafruit ESP8266/32u4/ARM Boards +
-                                         // FeatherWing OLED
+U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 
 // time keeping variables
 long tt_loop = 0;
@@ -120,7 +119,7 @@ void wakeupProc() {
   u8g2.sendBuffer();
   delay(2000);
   u8g2.clearBuffer();
-  
+
   pinMode(RPMPOWER, OUTPUT);
   pinMode(CHTPOWER, OUTPUT);
   pinMode(LED_BUILTIN, OUTPUT);
