@@ -17,7 +17,8 @@
 #define chipSelect 4
 
 // uncomment this for dev mode
-// #define DEVMODE 1
+#define DEVMODE 1
+#define FAKERPM 1
 
 // SAMD serial port adaptation
 #if defined(ARDUINO_SAMD_ZERO) && defined(SERIAL_PORT_USBVIRTUAL)
@@ -40,10 +41,13 @@ float ww = 3;  // filter weight. larger numbers -> slower filters. 40 is ..s, 1
 
 // defines for tacho: Timer auxiliary variables
 unsigned long tt = millis();
-unsigned long dt = micros();
-unsigned long oldtime = micros();
-float rev = 0;
+volatile unsigned long dt = micros();
+volatile unsigned long oldtime = micros();
+volatile float rev = 0;
 float rpm = 0;
+
+unsigned long fakerpm_dt = 0;
+unsigned long fakerpm_tt = 0;
 
 unsigned long lastTrigger = 0;
 boolean startTimer = false;
@@ -120,10 +124,15 @@ void wakeupProc() {
   delay(2000);
   u8g2.clearBuffer();
 
+#if defined(FAKERPM)
+  pinMode(RPMPOWER, INPUT);
+  digitalWrite(RPMPOWER, LOW);
+#else
   pinMode(RPMPOWER, OUTPUT);
+  digitalWrite(RPMPOWER, HIGH);
+#endif
   pinMode(CHTPOWER, OUTPUT);
   pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(RPMPOWER, HIGH);
   digitalWrite(CHTPOWER, HIGH);
 
   char filename[17];
@@ -194,6 +203,7 @@ void setup() {
 }
 
 void loop() {
+
   // check sleep status
   if (digitalRead(BUTTONPIN) == LOW) {
     bool switchSleepState = true;
@@ -221,6 +231,9 @@ void loop() {
     while (Serial.available() > 0) {
       // look for the next valid integer in the incoming serial stream:
       rev = Serial.parseInt();
+#if defined(FAKERPM)
+      fakerpm_dt = 60000.0/rev;
+#endif
       if (Serial.read() == '\n') {
         Serial.println(rev);
         if (rev < 0) {
@@ -230,11 +243,26 @@ void loop() {
         }
       }
     }
+
+#if defined(FAKERPM)
+    if (millis() - fakerpm_tt > fakerpm_dt) {
+      // pinmode input detaches internal pullup, so transistor takes pin to 0V
+      // however, it also detaches the interrupt for some reason
+      pinMode(RPMPIN, INPUT);
+      delayMicroseconds(20);
+      pinMode(RPMPIN, INPUT_PULLUP);
+      attachInterrupt(digitalPinToInterrupt(RPMPIN), rpm_isr, FALLING);
+      fakerpm_tt=millis();
+    }
+#endif
+
     // Serial.println(rpm_filt);
 #endif
     if (millis() - tt_loop > loopUpdateTime) {
       updateRunningTime();
-      updateTacho();
+      if(rev>0){
+        updateTacho();
+      }
       readCht();
       readBatteryVoltage();
       readCht();
@@ -354,9 +382,11 @@ void rpm_isr() {
 }
 
 void updateTacho() {
-  // dt = micros() - oldtime;
   if (dt > 0) {
     rpm = (rev / dt) * 60000000;
+#if defined(FAKERPM)
+    rev = 0;
+#endif
 #if !defined(DEVMODE)
     rev = 0;
 #endif
