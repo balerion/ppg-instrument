@@ -398,8 +398,8 @@ void updateTacho() {
     Serial.print(rpm_filt);
     Serial.print(" ");
     Serial.println(dt);
-  }
 #endif
+  }
 }
 
 typedef struct printStruct {
