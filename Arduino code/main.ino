@@ -309,27 +309,6 @@ void displayTime() {
 
   u8g2.setFont(u8g2_font_profont10_mn);
   u8g2.drawStr(x, y + 8, buffer);
-
-  // Serial.print("total runtime: ");
-  // Serial.println(total_runtime);
-  // buffer[10];  // make this big enough to hold the resulting string
-  // snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d",
-  //          int(total_runtime / 3600000.0),
-  //          int(total_runtime / 60000.0) - int(total_runtime / 3600000.0) *
-  //          60, int(total_runtime / 1000.0) - int(total_runtime / 60000.0) *
-  //          60);
-  // Serial.println(buffer);
-
-  // time to OLED
-  // displayString = "";
-  // for (int i = 0; i < pp.decimals; i++) {
-  //   if (last < pow(10, i)) {
-  //     displayString = "0" + displayString;
-  //   } else {
-  //     displayString = (String)last;
-  //   }
-  // }
-  // // displayString = "." + displayString;
 }
 
 // Function to calculate and return the thermocouple reading.
@@ -456,84 +435,14 @@ void updateMainDisplay() {
   chtPrint.x = 0;
   chtPrint.y = 0;
 
-  // u8g2.firstPage();
-  // do {
   smallPrint(rpmPrint);
   drawBar(chtBar);
   drawBar(rpmBar);
-  // if (millis() - tt_slowdraw > dt_slowdraw) {
-  // tt_slowdraw = millis();
   smallPrint(chtPrint);
   displayTime();
   drawBatteryLevel();
   u8g2.sendBuffer();
-  // }
-  // } while (u8g2.nextPage());
 }
-
-// void bigPrint(struct printStruct pp)
-// {
-//   int first, last;
-
-//   // Display prefix (title)
-//   displayString = pp.prefix;
-//   displayString.toCharArray(displayBuffer, 10);
-//   u8g2.setFont(u8g2_font_profont12_tr);
-//   u8g2.drawStr(pp.x, pp.y - 1, displayBuffer);
-
-//   // Split up the float value: a number, b decimals.
-//   first = abs(floor(pp.value));
-//   last = pp.value * pow(10, 2) - first * pow(10, 2);
-
-//   // Add leading zeros (2+bigChars-decimals)
-//   if (first < pow(10, 2) && pp.bigChars > 2)
-//   {
-//     displayString = "0" + (String)first;
-//   }
-//   else
-//   {
-//     if (first <= 9 && pp.bigChars > 1)
-//     {
-//       displayString = "00" + (String)first;
-//     }
-//     else
-//     {
-//       displayString = (String)first;
-//     }
-//   }
-
-//   // Display numbers
-//   displayString.toCharArray(displayBuffer, 10);
-//   u8g2.setFont(u8g2_font_logisoso22_tn);
-//   u8g2.drawStr(pp.x + 55, pp.y + 13, displayBuffer);
-
-//   // Display decimals
-//   displayString = ".";
-
-//   if (pp.decimals > 1)
-//   {
-//     if (last <= 9)
-//     {
-//       displayString += "0" + (String)last;
-//     }
-//     else
-//     {
-//       displayString += (String)last;
-//     }
-//   }
-//   else
-//     displayString += (String)last;
-
-//   displayString.toCharArray(displayBuffer, pp.decimals + 2);
-//   u8g2.setFont(u8g2_font_profont12_tr);
-//   u8g2.drawStr(pp.x + 86, pp.y - 1, displayBuffer);
-
-//   // Display suffix
-//   displayString = pp.suffix;
-//   displayString.toCharArray(displayBuffer, 10);
-//   u8g2.setFont(u8g2_font_profont12_tr);
-//   u8g2.drawStr(pp.x + 86 + 2, pp.y + 13, displayBuffer);
-// }
 
 void smallPrint(struct printStruct pp) {
   int first, last;
@@ -645,28 +554,6 @@ void drawBar(
   for (int i = 0; i < width; i++) {
     u8g2.drawVLine(pp.x + i + 2, pp.y + 2, 7);
   }
-
-  // if (throttle >= 127)
-  // {
-  //   int width = map(inputValue, 127, 255, 0, 49);
-
-  //   for (int i = 0; i < width; i++)
-  //   {
-  //     //if( (i % 2) == 0){
-  //     u8g2.drawVLine(x + i + 2, y + 2, 7);
-  //     //}
-  //   }
-  // }
-  // else
-  // {
-  //   int width = map(inputValue, 0, 126, 49, 0);
-  //   for (int i = 0; i < width; i++)
-  //   {
-  //     //if( (i % 2) == 0){
-  //     u8g2.drawVLine(x + 50 - i, y + 2, 7);
-  //     //}
-  //   }
-  // }
 }
 
 float map_float(float x, float in_min, float in_max, float out_min,
