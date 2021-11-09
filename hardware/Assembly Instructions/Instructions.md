@@ -70,4 +70,4 @@ The battery I had lying around was a 1000mAh 60x40mmx5mm battery (504060 battery
 
 The fastening strap is mixed hook&loop, which means it sticks to itself. I found this pretty convenient, and pretty safe.
 
-![functioning](final.jpg)
+![functioning](final.png)
