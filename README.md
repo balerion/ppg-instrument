@@ -28,6 +28,8 @@ Inspiration for the buttons came from [here](https://www.instagram.com/p/BypbXyj
 I also use a 1" dual hook & loop strap (like velcro omni-tape) to keep it fixed to my throttle.
 
 ## Assembly Instructions
+Check [here](hardware/Assembly%20Instructions/Instructions.md) for assembly instructions.
+
 For the buttons, I chose to go for a cheaper, more reliable, more customizable way. This is however a little more tricky.
 You need some of these
 
