@@ -68,7 +68,8 @@ After this, try fitting the feather board. This will give you a good idea of whe
 
 The battery I had lying around was a 1000mAh 60x40mmx5mm battery (504060 battery format). This was pretty old, now you can either find the same capacity with a smaller size, or up to 1800mAh for the same format. Probably a smaller battery will fit nicely.
 
-![assembled](final_open.jpg)
+![assembled](final_open.jpg =50x70)
 
 The fastening strap is mixed hook&loop, which means it sticks to itself. I found this pretty convenient, and pretty safe.
 
+![functioning](final_closed.jpg =50x70)
