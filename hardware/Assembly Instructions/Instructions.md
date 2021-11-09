@@ -40,6 +40,8 @@ In the end, you get one wire per button plus the ground.
 # Spark plug sensor
 The spark plug input circuit works by capacitive coupling a pigtail wire to the spark plug cable. The spark plug cable itself will reach pretty high negative voltages, in the 10kV range. This in turn causes a positive voltage spike in the pigtail wire. The circuit is designed with an input low pass filter, so the spike does not reach dangerous values, and right after this, a high pass filter that is more meant as a protection than a filter. Then, there are two diodes for input protection against overvoltages and undervoltages for a transistor, which generates a ~20us low-logic pulse every time a spark happens.
 
+In general, 5-6 wraps should be sufficient. Use the smallest number of wraps that will give a consistent reading. Too many wraps can cause issues with ignition and may damage the board.
+
 ![spark plug sensor schematic](/hardware/spark_input.pdf)
 
 You can make the circuit on perf board, using smd components.
