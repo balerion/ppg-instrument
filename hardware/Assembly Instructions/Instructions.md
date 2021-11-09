@@ -56,15 +56,13 @@ Start by placing the 3d printed butting in their niches. Then, insert the button
 
 The screen is small and quite delicate. Be careful when assembling. Should probably design a better retaining niche.
 
-![fitting peripherals](assembly_peripherals.jpg)
-
 The micro SD card quality is quite important. When not in use, larger, faster SD cards will use up a lot of battery. Try to find cheap, slow ones. [These](https://www.ebay.it/itm/303426113204?ssPageName=STRK%3AMEBIDX%3AIT&_trksid=p2060353.m2749.l2649) 4Gb cards use 200uA when in standby.
 
 Isolate the SD card slot with some tape. This can cause shorts with the underlying boards.
 
 After this, try fitting the feather board. This will give you a good idea of where the connection wires should be. Try to keep this arrangement while soldering all the connections.
 
-![fitting feather](feather_placement.jpg)
+![fitting feather](placement.png)
 
 The battery I had lying around was a 1000mAh 60x40mmx5mm battery (504060 battery format). This was pretty old, now you can either find the same capacity with a smaller size, or up to 1800mAh for the same format. Probably a smaller battery will fit nicely.
 
