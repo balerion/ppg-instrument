@@ -33,3 +33,10 @@
 
 # Settings
 .vscode/*
+
+# Mac OS stuff
+.DS_Store?
+ehthumbs.db
+Icon?
+Thumbs.db
+*.DS_Store
