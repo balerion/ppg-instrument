@@ -35,7 +35,7 @@ You need some of these
 
 The screen is small and quite delicate. Be careful when assembling. Should probably design retaining niche better
 
-the batetry i had lying around was a 1000mAh 60x40mmx5mm battery. This was pretty old, now they make them smaller of larger capacity for same size. probably a smaller one will fit nicely
+the battery i had lying around was a 1000mAh 60x40mmx5mm battery. This was pretty old, now they make them smaller of larger capacity for same size. probably a smaller one will fit nicely
 
 The SD card quality is quite important. When not in use, larger, faster SD cards will use up a lot of battery. I bought some cheap 4Gb ones, which use 200uA when in standby.
 

@@ -16,9 +16,11 @@ There really isn't so much space in the case, so I made these instructions to sh
 This part is a little bit artisanal.
 The first thing you will need is the Buttons board, since this is placed pretty deep into the assembly.
 To build it, you can use 2x steel tactile dome switches (triangular 6mm, 2 leg such as [these](https://www.aliexpress.com/item/32668884101.html)), and a pcb. A piece of perfboard should also work.
+
 ![image of perf buttons](buttons_perf.png)
 
 The board size is 30mm x 9mm, with buttons distanced 18mm and centered on the board. If you are using perfboard, the switch leg holes will not be centered, but will be 5mm/4mm away from the top and bottom edge.
+
 ![button assembly](buttons.jpg)
 
 Isolate the connections coming from the central pad with PCB enamel or a little bit of kapton tape, otherwise the buttons will be shorted all the time.
